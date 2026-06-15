@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glamurosa · Lip Oil Launch</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Montserrat:wght@300;400;600;700&family=Cormorant+Garamond:ital,wght@1,400;1,600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1080px;
+    height: 1080px;
+    overflow: hidden;
+    background: #FAF7F2; /* Ivory Crème */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .post {
+    width: 1080px;
+    height: 1080px;
+    position: relative;
+    background: #FAF7F2;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Arco decorativo de fundo */
+  .arc-bg {
+    position: absolute;
+    bottom: -180px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 900px;
+    height: 900px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, #FFD4C4 0%, #FF9A7C 50%, #FF7390 100%);
+    opacity: 0.18;
+    z-index: 0;
+  }
+
+  /* Círculo rose principal atrás do produto */
+  .circle-rose {
+    position: absolute;
+    bottom: 160px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 520px;
+    height: 520px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #FFD4C4 0%, #FF9A7C 55%, #FF7390 100%);
+    opacity: 0.28;
+    z-index: 1;
+  }
+
+  /* Arco elegante outline */
+  .circle-outline {
+    position: absolute;
+    bottom: 130px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 580px;
+    height: 580px;
+    border-radius: 50%;
+    border: 1.5px solid #C9A961;
+    opacity: 0.5;
+    z-index: 2;
+  }
+
+  /* Header */
+  .header {
+    position: relative;
+    z-index: 10;
+    padding: 48px 64px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo-mark {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 700;
+    font-size: 28px;
+    color: #514B4A;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-mark span {
+    color: #FF7390;
+  }
+
+  .badge-novidade {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #FFFFFF;
+    background: linear-gradient(90deg, #FF9A7C, #FF7390);
+    padding: 8px 18px;
+    border-radius: 100px;
+  }
+
+  /* Eyebrow */
+  .eyebrow {
+    position: relative;
+    z-index: 10;
+    padding: 36px 64px 0;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #C9A961;
+  }
+
+  /* Headline */
+  .headline {
+    position: relative;
+    z-index: 10;
+    padding: 12px 64px 0;
+  }
+
+  .headline h1 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: 64px;
+    line-height: 1.0;
+    letter-spacing: -0.01em;
+    color: #2A2324;
+  }
+
+  .headline h1 em {
+    font-style: italic;
+    color: #FF7390;
+  }
+
+  /* Editorial tagline */
+  .editorial {
+    position: relative;
+    z-index: 10;
+    padding: 14px 64px 0;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 22px;
+    color: #6A5F5E;
+    letter-spacing: 0.01em;
+  }
+
+  /* Produto */
+  .product-wrap {
+    position: absolute;
+    z-index: 5;
+    bottom: 140px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .product-wrap img {
+    width: 340px;
+    height: auto;
+    filter: drop-shadow(0px 32px 48px rgba(255,115,144,0.25)) drop-shadow(0px 8px 16px rgba(42,35,36,0.12));
+    transform: rotate(-4deg);
+  }
+
+  /* Sparkles SVG */
+  .sparkles {
+    position: absolute;
+    z-index: 6;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  /* Preço + info */
+  .price-block {
+    position: absolute;
+    z-index: 10;
+    bottom: 148px;
+    right: 64px;
+    text-align: right;
+  }
+
+  .price-label {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: #6A5F5E;
+    margin-bottom: 4px;
+  }
+
+  .price-value {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 52px;
+    line-height: 1;
+    color: #2A2324;
+  }
+
+  .price-value sup {
+    font-size: 24px;
+    vertical-align: top;
+    margin-top: 8px;
+    display: inline-block;
+  }
+
+  .price-caption {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    color: #6A5F5E;
+    margin-top: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Linha divisória dourada */
+  .divider {
+    position: absolute;
+    z-index: 10;
+    bottom: 128px;
+    left: 64px;
+    width: 220px;
+    height: 1px;
+    background: linear-gradient(90deg, #C9A961, transparent);
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    z-index: 10;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: #2A2324;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 64px;
+  }
+
+  .footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .footer-handle {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: #FAF7F2;
+    letter-spacing: 0.05em;
+  }
+
+  .footer-site {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 300;
+    font-size: 11px;
+    color: #6A5F5E;
+    letter-spacing: 0.08em;
+  }
+
+  .footer-benefits {
+    display: flex;
+    gap: 32px;
+  }
+
+  .benefit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .benefit-value {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: #C9A961;
+  }
+
+  .benefit-label {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 400;
+    font-size: 9px;
+    color: #6A5F5E;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  /* Bullet points produto */
+  .product-bullets {
+    position: absolute;
+    z-index: 10;
+    bottom: 148px;
+    left: 64px;
+  }
+
+  .bullet {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .bullet-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #FF7390;
+    flex-shrink: 0;
+  }
+
+  .bullet span {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: #514B4A;
+    letter-spacing: 0.03em;
+  }
+</style>
+</head>
+<body>
+<div class="post">
+
+  <!-- Fundos decorativos -->
+  <div class="arc-bg"></div>
+  <div class="circle-rose"></div>
+  <div class="circle-outline"></div>
+
+  <!-- Sparkles SVG decorativos -->
+  <svg class="sparkles" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Sparkle 1 -->
+    <g opacity="0.7" transform="translate(820, 220)">
+      <line x1="0" y1="-18" x2="0" y2="18" stroke="#C9A961" stroke-width="1.5"/>
+      <line x1="-18" y1="0" x2="18" y2="0" stroke="#C9A961" stroke-width="1.5"/>
+      <line x1="-12" y1="-12" x2="12" y2="12" stroke="#C9A961" stroke-width="1"/>
+      <line x1="12" y1="-12" x2="-12" y2="12" stroke="#C9A961" stroke-width="1"/>
+    </g>
+    <!-- Sparkle 2 pequeno -->
+    <g opacity="0.5" transform="translate(870, 310)">
+      <line x1="0" y1="-10" x2="0" y2="10" stroke="#C9A961" stroke-width="1"/>
+      <line x1="-10" y1="0" x2="10" y2="0" stroke="#C9A961" stroke-width="1"/>
+    </g>
+    <!-- Sparkle 3 -->
+    <g opacity="0.6" transform="translate(160, 420)">
+      <line x1="0" y1="-14" x2="0" y2="14" stroke="#FF9A7C" stroke-width="1.2"/>
+      <line x1="-14" y1="0" x2="14" y2="0" stroke="#FF9A7C" stroke-width="1.2"/>
+      <line x1="-9" y1="-9" x2="9" y2="9" stroke="#FF9A7C" stroke-width="0.8"/>
+      <line x1="9" y1="-9" x2="-9" y2="9" stroke="#FF9A7C" stroke-width="0.8"/>
+    </g>
+    <!-- Sparkle 4 -->
+    <g opacity="0.4" transform="translate(760, 680)">
+      <line x1="0" y1="-10" x2="0" y2="10" stroke="#C9A961" stroke-width="1"/>
+      <line x1="-10" y1="0" x2="10" y2="0" stroke="#C9A961" stroke-width="1"/>
+    </g>
+    <!-- Sparkle 5 grande -->
+    <g opacity="0.55" transform="translate(200, 700)">
+      <line x1="0" y1="-20" x2="0" y2="20" stroke="#C9A961" stroke-width="1.5"/>
+      <line x1="-20" y1="0" x2="20" y2="0" stroke="#C9A961" stroke-width="1.5"/>
+      <line x1="-13" y1="-13" x2="13" y2="13" stroke="#C9A961" stroke-width="1"/>
+      <line x1="13" y1="-13" x2="-13" y2="13" stroke="#C9A961" stroke-width="1"/>
+    </g>
+    <!-- Ícone gota decorativo -->
+    <g opacity="0.15" transform="translate(900, 450)">
+      <path d="M0,-30 C0,-30 20,0 20,12 C20,23 11,30 0,30 C-11,30 -20,23 -20,12 C-20,0 0,-30 0,-30 Z" fill="#FF7390"/>
+    </g>
+    <!-- Ornamento divisor central topo -->
+    <g opacity="0.3" transform="translate(540, 42)">
+      <line x1="-60" y1="0" x2="-8" y2="0" stroke="#C9A961" stroke-width="1"/>
+      <circle cx="0" cy="0" r="3" fill="#C9A961"/>
+      <line x1="8" y1="0" x2="60" y2="0" stroke="#C9A961" stroke-width="1"/>
+    </g>
+  </svg>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-mark"><span>g</span> · Glamurosa</div>
+    <div class="badge-novidade">Novidade</div>
+  </div>
+
+  <!-- Eyebrow -->
+  <div class="eyebrow">Lançamento · Linha Boca</div>
+
+  <!-- Headline -->
+  <div class="headline">
+    <h1>Lábios<br><em>nutridos</em><br>o dia todo.</h1>
+  </div>
+
+  <!-- Editorial -->
+  <div class="editorial">— hidratação que você sente no primeiro toque</div>
+
+  <!-- Produto -->
+  <div class="product-wrap">
+    <img src="/root/.claude/uploads/1090bcbe-b09a-5406-a45f-74ad25c76e58/cbea4810-Glamurosa_Make_Up___Design_System.zip_extracted_product.png"
+         onerror="this.style.display='none'; document.getElementById('product-placeholder').style.display='flex';"
+         alt="Bauny Lip Oil Hidratante">
+    <!-- Placeholder caso imagem não carregue -->
+    <div id="product-placeholder" style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:280px; height:380px; background:linear-gradient(160deg,#FFD4C4,#FF9A7C,#FF7390); border-radius:40px; opacity:0.4;">
+      <span style="font-family:'Playfair Display',serif; font-size:28px; color:white; font-weight:700;">LIP OIL</span>
+      <span style="font-family:'Montserrat',sans-serif; font-size:12px; color:white; margin-top:8px;">Bauny</span>
+    </div>
+  </div>
+
+  <!-- Bullet points -->
+  <div class="product-bullets">
+    <div class="bullet">
+      <div class="bullet-dot"></div>
+      <span>2% Phytoesqualano</span>
+    </div>
+    <div class="bullet">
+      <div class="bullet-dot"></div>
+      <span>Blend de óleos nutritivos</span>
+    </div>
+    <div class="bullet">
+      <div class="bullet-dot"></div>
+      <span>Efeito gloss natural</span>
+    </div>
+  </div>
+
+  <!-- Divisória -->
+  <div class="divider"></div>
+
+  <!-- Preço -->
+  <div class="price-block">
+    <div class="price-label">a partir de</div>
+    <div class="price-value"><sup>R$</sup>15</div>
+    <div class="price-caption">frete grátis acima de R$ 99</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-left">
+      <div class="footer-handle">@glamurosa.makeup</div>
+      <div class="footer-site">makeup-glamurosa.com.br</div>
+    </div>
+    <div class="footer-benefits">
+      <div class="benefit">
+        <div class="benefit-value">3x</div>
+        <div class="benefit-label">sem juros</div>
+      </div>
+      <div class="benefit">
+        <div class="benefit-value">R$ 99</div>
+        <div class="benefit-label">frete grátis</div>
+      </div>
+      <div class="benefit">
+        <div class="benefit-value">R$ 15</div>
+        <div class="benefit-label">a partir de</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
