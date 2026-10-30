@@ -1,0 +1,565 @@
+<script>
+  /**
+   * Painel Financeiro — parte que roda no navegador (computador, tablet ou celular).
+   * Ela pede os dados ao Code.gs, faz as contas do mês escolhido e desenha as telas.
+   */
+  const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const MESES_CURTOS = MESES.map(function (m) { return m.slice(0, 3); });
+  const INTERNO = 'Movimento Interno'; // a Bússola não soma transferências entre contas
+  const DIAS_A_FRENTE = 15;
+
+  const S = {
+    dados: null,
+    ano: 0,
+    mes: 0, // 0 = janeiro
+    tela: 'inicio',
+    tipoLista: 'despesa',
+    situacao: 'todos',
+    busca: '',
+    tipoNovo: 'despesa',
+    baixa: null,
+    graficos: {},
+  };
+
+  // ---------- Conversa com a planilha ----------
+  function chamar(funcao, argumento) {
+    return new Promise(function (ok, erro) {
+      google.script.run.withSuccessHandler(ok).withFailureHandler(erro)[funcao](argumento);
+    });
+  }
+
+  function carregar() {
+    const btn = el('atualizar');
+    btn.disabled = true;
+    return chamar('getDados')
+      .then(receberDados)
+      .catch(function (e) { avisar('Erro ao ler a planilha: ' + e.message); })
+      .finally(function () { btn.disabled = false; });
+  }
+
+  function receberDados(dados) {
+    const primeiraVez = !S.dados;
+    S.dados = dados;
+    if (primeiraVez) {
+      const h = partes(dados.hoje);
+      S.ano = h.ano;
+      S.mes = h.mes;
+      el('carregando').remove();
+    }
+    render();
+  }
+
+  // ---------- Utilidades ----------
+  function el(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  const fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  const fmtCurto = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
+  function brl(v) { return fmtBRL.format(v || 0); }
+  function brlCurto(v) { return 'R$ ' + fmtCurto.format(v || 0); }
+  function partes(iso) {
+    const p = String(iso).split('-').map(Number);
+    return { ano: p[0], mes: p[1] - 1, dia: p[2] };
+  }
+  function ddmm(iso) { const p = partes(iso); return pad(p.dia) + '/' + pad(p.mes + 1); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function isoDe(ano, mes, dia) { return ano + '-' + pad(mes + 1) + '-' + pad(dia); }
+  function somarDias(iso, n) {
+    const p = partes(iso);
+    const d = new Date(p.ano, p.mes, p.dia + n);
+    return isoDe(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  function lerValor(texto) {
+    // Aceita "1.234,56", "1234,56" e "1234.56"
+    let s = String(texto).replace(/[R$\s]/g, '');
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    const n = Number(s);
+    return isFinite(n) ? n : NaN;
+  }
+  function cor(nome) { return getComputedStyle(document.documentElement).getPropertyValue('--' + nome).trim(); }
+  function soma(lista, fn) { return lista.reduce(function (t, x) { return t + (fn(x) || 0); }, 0); }
+
+  function doMes(lista, ano, mes) {
+    return lista.filter(function (l) {
+      if (!l.vencimento) return false;
+      const p = partes(l.vencimento);
+      return p.ano === ano && p.mes === mes;
+    });
+  }
+  function semInterno(lista) { return lista.filter(function (l) { return l.categoria !== INTERNO; }); }
+  function efetivado(l) { return l.efetivado === '' ? 0 : l.efetivado; }
+  // Igual à coluna RESULTADO: o que foi pago, ou o previsto se ainda não foi.
+  function realOuPrevisto(l) { return l.situacao === 'EFETIVADO' ? l.efetivado : l.previsto; }
+
+  function totaisDoMes(ano, mes) {
+    const r = semInterno(doMes(S.dados.receitas, ano, mes));
+    const d = semInterno(doMes(S.dados.despesas, ano, mes));
+    return {
+      recPrev: soma(r, function (l) { return l.previsto; }),
+      recEfet: soma(r, efetivado),
+      recReal: soma(r, realOuPrevisto),
+      desPrev: soma(d, function (l) { return l.previsto; }),
+      desEfet: soma(d, efetivado),
+      desReal: soma(d, realOuPrevisto),
+    };
+  }
+
+  function avisar(texto) {
+    const a = el('aviso');
+    a.textContent = texto;
+    a.classList.add('on');
+    clearTimeout(avisar.t);
+    avisar.t = setTimeout(function () { a.classList.remove('on'); }, 3500);
+  }
+
+  function selo(l) {
+    if (l.situacao === 'EFETIVADO') return '<span class="selo ok">Pago</span>';
+    if (l.vencimento && l.vencimento < S.dados.hoje) return '<span class="selo atraso">Atrasado</span>';
+    return '<span class="selo prev">Previsto</span>';
+  }
+
+  // ---------- Render geral ----------
+  function render() {
+    if (!S.dados) return;
+    el('mesRotulo').textContent = MESES[S.mes] + ' ' + S.ano;
+    document.querySelectorAll('.nav button').forEach(function (b) {
+      b.classList.toggle('on', b.dataset.tela === S.tela);
+    });
+    document.querySelectorAll('.tela').forEach(function (t) {
+      t.classList.toggle('ativa', t.id === 'tela-' + S.tela);
+    });
+    ({
+      inicio: renderInicio,
+      bussola: renderBussola,
+      lancamentos: renderLancamentos,
+      cartoes: renderCartoes,
+      novo: renderNovo,
+    })[S.tela]();
+  }
+
+  // ---------- Tela: Início ----------
+  function renderInicio() {
+    const t = totaisDoMes(S.ano, S.mes);
+    const fluxoMes = S.dados.fluxo.filter(function (p) {
+      const d = partes(p.data);
+      return d.ano === S.ano && d.mes === S.mes;
+    });
+
+    // Saldo: hoje (se o mês exibido é o atual) ou o último dia do mês exibido.
+    const hoje = S.dados.hoje;
+    let ref = fluxoMes.filter(function (p) { return p.data <= hoje; }).pop() || fluxoMes[fluxoMes.length - 1];
+    const fimMes = fluxoMes[fluxoMes.length - 1];
+    let saldo = 0, saldoRotulo = 'Saldo', saldoSub = '';
+    if (ref) {
+      const usouPrevisto = ref.efetivado === '';
+      saldo = usouPrevisto ? ref.previsto : ref.efetivado;
+      saldoRotulo = (ref.data === hoje ? 'Saldo hoje' : 'Saldo em ' + ddmm(ref.data)) + (usouPrevisto ? ' (previsto)' : '');
+      if (fimMes && fimMes !== ref) saldoSub = 'Fim do mês (previsto): ' + brl(fimMes.previsto);
+    }
+
+    const resEfet = t.recEfet - t.desEfet;
+    const resPrev = t.recPrev - t.desPrev;
+    el('kpis').innerHTML = [
+      kpi(saldoRotulo, 'saldo', brl(saldo), saldoSub, null, saldo < 0),
+      kpi('Receitas recebidas', 'receita', brl(t.recEfet), 'de ' + brl(t.recPrev) + ' previstas', t.recPrev ? t.recEfet / t.recPrev : 0),
+      kpi('Despesas pagas', 'despesa', brl(t.desEfet), 'de ' + brl(t.desPrev) + ' previstas', t.desPrev ? t.desEfet / t.desPrev : 0),
+      kpi('Resultado do mês', null, brl(resEfet), 'Previsto: ' + brl(resPrev), null, resEfet < 0),
+    ].join('');
+
+    graficoSaldo(fluxoMes);
+    renderProximos();
+    renderCategorias();
+    renderMaiores();
+  }
+
+  function kpi(rotulo, corNome, valor, sub, progresso, negativo) {
+    const ponto = corNome ? '<span class="ponto" style="background:var(--' + corNome + ')"></span>' : '';
+    const barra = progresso === null || progresso === undefined ? '' :
+      '<div class="barra" role="img" aria-label="' + Math.round(progresso * 100) + '% do previsto">' +
+      '<span style="width:' + Math.min(100, progresso * 100) + '%;background:var(--' + corNome + ')"></span></div>';
+    return '<div class="cartao kpi">' +
+      '<div class="rotulo">' + ponto + esc(rotulo) + '</div>' +
+      '<div class="valor num' + (negativo ? ' delta-neg' : '') + '">' + valor + '</div>' +
+      '<div class="sub">' + esc(sub) + '</div>' + barra + '</div>';
+  }
+
+  function renderProximos() {
+    const limite = somarDias(S.dados.hoje, DIAS_A_FRENTE);
+    const pend = []
+      .concat(S.dados.despesas.map(function (l) { return Object.assign({ tipo: 'despesa' }, l); }))
+      .concat(S.dados.receitas.map(function (l) { return Object.assign({ tipo: 'receita' }, l); }))
+      .filter(function (l) {
+        return l.situacao === 'PREVISTO' && l.previsto > 0 && l.vencimento && l.vencimento <= limite;
+      })
+      .sort(function (a, b) { return a.vencimento < b.vencimento ? -1 : a.vencimento > b.vencimento ? 1 : 0; });
+
+    const lista = el('proximos');
+    if (!pend.length) {
+      lista.innerHTML = '<li class="vazio">Nada pendente nos próximos ' + DIAS_A_FRENTE + ' dias.</li>';
+      return;
+    }
+    const mostrar = pend.slice(0, 6);
+    lista.innerHTML = mostrar.map(function (l, i) { return itemHtml(l, 'p' + i); }).join('') +
+      (pend.length > mostrar.length ? '<li class="vazio">+ ' + (pend.length - mostrar.length) + ' outros em Lançamentos</li>' : '');
+    ligarBaixas(lista, mostrar, 'p');
+  }
+
+  function itemHtml(l, chave) {
+    const sinal = l.tipo === 'receita' ? '+ ' : '− ';
+    const valor = l.situacao === 'EFETIVADO' ? l.efetivado : l.previsto;
+    return '<li class="item">' +
+      '<div><div class="titulo">' + esc(l.descricao) + '</div>' +
+      '<div class="meta">' + esc(l.categoria) + ' · vence ' + (l.vencimento ? ddmm(l.vencimento) : '—') +
+      (l.situacao === 'EFETIVADO' && l.efetivado !== l.previsto ? ' · previsto ' + brl(l.previsto) : '') + '</div></div>' +
+      '<div><div class="valor num">' + sinal + brl(valor) + '</div><div style="text-align:right">' + selo(l) + '</div></div>' +
+      (l.situacao === 'PREVISTO'
+        ? '<div class="acoes"><button class="btn mini" data-baixa="' + chave + '">' +
+          (l.tipo === 'receita' ? 'Marcar como recebido' : 'Marcar como pago') + '</button></div>'
+        : '') +
+      '</li>';
+  }
+
+  function ligarBaixas(container, itens, prefixo) {
+    container.querySelectorAll('[data-baixa]').forEach(function (b) {
+      const i = Number(b.dataset.baixa.slice(prefixo.length));
+      b.addEventListener('click', function () { abrirBaixa(itens[i]); });
+    });
+  }
+
+  function barrasHtml(linhas, total) {
+    if (!linhas.length) return '<p class="vazio">Sem despesas neste mês.</p>';
+    return linhas.map(function (x) {
+      const pct = total ? (x.valor / total) * 100 : 0;
+      return '<div class="hbar"><div class="linha1"><span>' + esc(x.nome) + '</span>' +
+        '<span class="num">' + brl(x.valor) + ' <span style="color:var(--texto-3)">· ' + Math.round(pct) + '%</span></span></div>' +
+        '<div class="trilho"><span style="width:' + pct + '%;background:' + x.cor + '"></span></div></div>';
+    }).join('');
+  }
+
+  function renderCategorias() {
+    const desp = semInterno(doMes(S.dados.despesas, S.ano, S.mes));
+    // A cor acompanha a classificação (ordem fixa da planilha), nunca a posição no ranking.
+    const ordem = S.dados.categorias.despesa.filter(function (c) { return c !== INTERNO; });
+    const total = soma(desp, realOuPrevisto);
+    const linhas = ordem.map(function (c, i) {
+      return {
+        nome: c,
+        valor: soma(desp.filter(function (l) { return l.categoria === c; }), realOuPrevisto),
+        cor: i < 3 ? 'var(--cat-' + (i + 1) + ')' : 'var(--texto-3)',
+      };
+    }).filter(function (x) { return x.valor > 0; });
+    el('porCategoria').innerHTML = barrasHtml(linhas, total);
+  }
+
+  function renderMaiores() {
+    const desp = semInterno(doMes(S.dados.despesas, S.ano, S.mes));
+    const total = soma(desp, realOuPrevisto);
+    const linhas = desp
+      .map(function (l) { return { nome: l.descricao, valor: realOuPrevisto(l), cor: 'var(--despesa)' }; })
+      .filter(function (x) { return x.valor > 0; })
+      .sort(function (a, b) { return b.valor - a.valor; })
+      .slice(0, 6);
+    el('maiores').innerHTML = barrasHtml(linhas, total);
+  }
+
+  // ---------- Gráficos (Chart.js) ----------
+  function baseOpcoes() {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false }, // legenda feita em HTML acima de cada gráfico
+        tooltip: {
+          backgroundColor: cor('superficie'),
+          titleColor: cor('texto'),
+          bodyColor: cor('texto-2'),
+          borderColor: cor('grade'),
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: function (c) { return ' ' + c.dataset.label + ': ' + brl(c.parsed.y); },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: cor('texto-3'), maxRotation: 0, autoSkipPadding: 12 }, border: { color: cor('grade') } },
+        y: {
+          grid: { color: cor('grade') },
+          border: { display: false },
+          ticks: { color: cor('texto-3'), callback: function (v) { return brlCurto(v); }, maxTicksLimit: 6 },
+        },
+      },
+    };
+  }
+
+  function desenhar(id, config) {
+    if (S.graficos[id]) S.graficos[id].destroy();
+    if (typeof Chart === 'undefined') return;
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    S.graficos[id] = new Chart(el(id), config);
+  }
+
+  function graficoSaldo(pontos) {
+    const azul = cor('saldo');
+    desenhar('graficoSaldo', {
+      type: 'line',
+      data: {
+        labels: pontos.map(function (p) { return ddmm(p.data); }),
+        datasets: [
+          {
+            label: 'Efetivado', borderColor: azul, backgroundColor: azul, borderWidth: 2,
+            data: pontos.map(function (p) { return p.efetivado === '' ? null : p.efetivado; }),
+            pointRadius: 0, pointHoverRadius: 5, tension: 0,
+          },
+          {
+            label: 'Previsto', borderColor: azul, backgroundColor: azul, borderWidth: 2, borderDash: [5, 4],
+            data: pontos.map(function (p) { return p.previsto === '' ? null : p.previsto; }),
+            pointRadius: 0, pointHoverRadius: 5, tension: 0,
+          },
+        ],
+      },
+      options: baseOpcoes(),
+    });
+  }
+
+  // ---------- Tela: Bússola ----------
+  function renderBussola() {
+    const meses = MESES.map(function (_, m) { return totaisDoMes(S.ano, m); });
+    const opcoes = baseOpcoes();
+    desenhar('graficoAno', {
+      type: 'bar',
+      data: {
+        labels: MESES_CURTOS,
+        datasets: [
+          { type: 'line', label: 'Resultado', data: meses.map(function (t) { return t.recReal - t.desReal; }),
+            borderColor: cor('saldo'), backgroundColor: cor('saldo'), borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, order: 0 },
+          { type: 'bar', label: 'Receitas', data: meses.map(function (t) { return t.recReal; }),
+            backgroundColor: cor('receita'), borderRadius: 4, borderSkipped: 'start', order: 1,
+            borderColor: cor('superficie'), borderWidth: { left: 1, right: 1 } },
+          { type: 'bar', label: 'Despesas', data: meses.map(function (t) { return t.desReal; }),
+            backgroundColor: cor('despesa'), borderRadius: 4, borderSkipped: 'start', order: 1,
+            borderColor: cor('superficie'), borderWidth: { left: 1, right: 1 } },
+        ],
+      },
+      options: Object.assign(opcoes, {
+        onClick: function (_, els) {
+          if (els.length) { S.mes = els[0].index; render(); }
+        },
+      }),
+    });
+
+    let linhas = '<thead><tr><th>Mês</th><th>Receitas prev.</th><th>Receitas efet.</th>' +
+      '<th>Despesas prev.</th><th>Despesas efet.</th><th>Resultado prev.</th><th>Resultado efet.</th></tr></thead><tbody>';
+    const tot = { rp: 0, re: 0, dp: 0, de: 0 };
+    meses.forEach(function (t, m) {
+      tot.rp += t.recPrev; tot.re += t.recEfet; tot.dp += t.desPrev; tot.de += t.desEfet;
+      linhas += '<tr class="' + (m === S.mes ? 'atual' : '') + '"><td>' + MESES[m] + '</td>' +
+        celulas([t.recPrev, t.recEfet, t.desPrev, t.desEfet]) +
+        celulaRes(t.recPrev - t.desPrev) + celulaRes(t.recEfet - t.desEfet) + '</tr>';
+    });
+    linhas += '</tbody><tfoot><tr><td><b>Total</b></td>' + celulas([tot.rp, tot.re, tot.dp, tot.de]) +
+      celulaRes(tot.rp - tot.dp) + celulaRes(tot.re - tot.de) + '</tr></tfoot>';
+    el('tabelaBussola').innerHTML = linhas;
+  }
+  function celulas(vs) { return vs.map(function (v) { return '<td class="num">' + brl(v) + '</td>'; }).join(''); }
+  function celulaRes(v) { return '<td class="num ' + (v < 0 ? 'delta-neg' : '') + '">' + brl(v) + '</td>'; }
+
+  // ---------- Tela: Lançamentos ----------
+  function renderLancamentos() {
+    const fonte = S.tipoLista === 'receita' ? S.dados.receitas : S.dados.despesas;
+    const termo = S.busca.trim().toLowerCase();
+    const itens = doMes(fonte, S.ano, S.mes)
+      .filter(function (l) {
+        if (S.situacao === 'previsto' && l.situacao !== 'PREVISTO') return false;
+        if (S.situacao === 'efetivado' && l.situacao !== 'EFETIVADO') return false;
+        return !termo || l.descricao.toLowerCase().indexOf(termo) >= 0;
+      })
+      .map(function (l) { return Object.assign({ tipo: S.tipoLista }, l); })
+      .sort(function (a, b) {
+        return a.vencimento === b.vencimento ? a.descricao.localeCompare(b.descricao) : a.vencimento < b.vencimento ? -1 : 1;
+      });
+
+    el('resumoLista').textContent = itens.length + ' lançamento(s) em ' + MESES[S.mes] +
+      ' · previsto ' + brl(soma(itens, function (l) { return l.previsto; })) +
+      ' · efetivado ' + brl(soma(itens, efetivado));
+    const lista = el('listaLancamentos');
+    lista.innerHTML = itens.length ? itens.map(function (l, i) { return itemHtml(l, 'l' + i); }).join('')
+      : '<li class="vazio">Nenhum lançamento com esses filtros.</li>';
+    ligarBaixas(lista, itens, 'l');
+  }
+
+  // ---------- Tela: Contas e cartões ----------
+  function renderCartoes() {
+    const parc = S.dados.parcelados.filter(function (p) { return p.ano === S.ano; });
+    const porMes = MESES.map(function (_, m) {
+      return soma(parc.filter(function (p) { return p.mes === m + 1; }), function (p) { return p.valor; });
+    });
+    const opcoes = baseOpcoes();
+    opcoes.interaction = { mode: 'nearest', intersect: true };
+    desenhar('graficoParcelas', {
+      type: 'bar',
+      data: {
+        labels: MESES_CURTOS,
+        datasets: [{ label: 'Parcelas', data: porMes, backgroundColor: cor('despesa'), borderRadius: 4, borderSkipped: 'start' }],
+      },
+      options: opcoes,
+    });
+
+    // Quanto ainda falta pagar, por cartão, do mês exibido em diante.
+    const restante = {};
+    parc.filter(function (p) { return p.mes >= S.mes + 1; }).forEach(function (p) {
+      restante[p.cartao] = (restante[p.cartao] || 0) + p.valor;
+    });
+    const linhas = Object.keys(restante).map(function (c) { return { nome: c, valor: restante[c], cor: 'var(--despesa)' }; })
+      .sort(function (a, b) { return b.valor - a.valor; });
+    const total = soma(linhas, function (x) { return x.valor; });
+    el('parcelasPorCartao').innerHTML =
+      '<p class="ajuda">Ainda a pagar de ' + MESES[S.mes] + ' em diante: <b class="num">' + brl(total) + '</b></p>' +
+      (linhas.length ? barrasHtml(linhas, total) : '');
+
+    const contas = S.dados.contas;
+    el('listaContas').innerHTML = contas.length ? contas.map(function (c) {
+      return '<li class="item"><div><div class="titulo">' + esc(c.nome) + '</div>' +
+        '<div class="meta">desde ' + (c.dataInicial ? ddmm(c.dataInicial) : '—') + '</div></div>' +
+        '<div class="valor num' + (c.saldoInicial < 0 ? ' delta-neg' : '') + '">' + brl(c.saldoInicial) + '</div></li>';
+    }).join('') + '<li class="item"><div class="titulo">Total inicial</div><div class="valor num">' +
+      brl(soma(contas, function (c) { return c.saldoInicial; })) + '</div></li>'
+      : '<li class="vazio">Nenhuma conta encontrada na aba 1.</li>';
+  }
+
+  // ---------- Tela: Novo lançamento ----------
+  function renderNovo() {
+    const tipo = S.tipoNovo;
+    document.querySelectorAll('#tipoNovo button').forEach(function (b) {
+      if (b.dataset.v === tipo) b.setAttribute('data-on', tipo); else b.removeAttribute('data-on');
+    });
+    el('rotuloCategoria').textContent = tipo === 'receita' ? 'Tipo' : 'Classificação';
+    const sel = el('fCategoria');
+    const atual = sel.value;
+    sel.innerHTML = S.dados.categorias[tipo].map(function (c) {
+      return '<option>' + esc(c) + '</option>';
+    }).join('');
+    if (S.dados.categorias[tipo].indexOf(atual) >= 0) sel.value = atual;
+
+    const fonte = tipo === 'receita' ? S.dados.receitas : S.dados.despesas;
+    const unicas = Array.from(new Set(fonte.map(function (l) { return l.descricao; })));
+    el('sugestoes').innerHTML = unicas.map(function (d) { return '<option value="' + esc(d) + '">'; }).join('');
+    if (!el('fVencimento').value) {
+      const h = partes(S.dados.hoje);
+      el('fVencimento').value = S.mes === h.mes && S.ano === h.ano ? S.dados.hoje : isoDe(S.ano, S.mes, 1);
+    }
+  }
+
+  // Ao escolher uma descrição já usada, sugere a mesma categoria e valor da última vez.
+  function autoPreencher() {
+    const fonte = S.tipoNovo === 'receita' ? S.dados.receitas : S.dados.despesas;
+    const desc = el('fDescricao').value.trim();
+    const ultimo = fonte.filter(function (l) { return l.descricao === desc; }).pop();
+    if (!ultimo) return;
+    el('fCategoria').value = ultimo.categoria;
+    if (!el('fValor').value) el('fValor').value = String(ultimo.previsto.toFixed(2)).replace('.', ',');
+  }
+
+  function salvarNovo(ev) {
+    ev.preventDefault();
+    const valor = lerValor(el('fValor').value);
+    if (!(valor > 0)) { avisar('Digite um valor válido, ex.: 149,90'); return; }
+    const dados = {
+      tipo: S.tipoNovo,
+      descricao: el('fDescricao').value,
+      categoria: el('fCategoria').value,
+      valor: valor,
+      vencimento: el('fVencimento').value,
+      repetir: Number(el('fRepetir').value) || 1,
+    };
+    const btn = el('salvarNovo');
+    btn.disabled = true;
+    btn.textContent = 'Salvando…';
+    chamar('addLancamento', dados)
+      .then(function (novos) {
+        receberDados(novos);
+        avisar(dados.repetir > 1 ? dados.repetir + ' lançamentos salvos na planilha.' : 'Lançamento salvo na planilha.');
+        el('fDescricao').value = '';
+        el('fValor').value = '';
+        el('fRepetir').value = 1;
+      })
+      .catch(function (e) { avisar(e.message); })
+      .finally(function () { btn.disabled = false; btn.textContent = 'Salvar na planilha'; });
+  }
+
+  // ---------- Diálogo: dar baixa ----------
+  function abrirBaixa(item) {
+    S.baixa = item;
+    el('baixaTitulo').textContent = item.tipo === 'receita' ? 'Marcar como recebido' : 'Marcar como pago';
+    el('baixaSub').textContent = item.descricao + ' · vence ' + ddmm(item.vencimento) + ' · previsto ' + brl(item.previsto);
+    el('bValor').value = item.previsto.toFixed(2).replace('.', ',');
+    el('bData').value = S.dados.hoje;
+    el('dlgBaixa').showModal();
+  }
+
+  function salvarBaixa(ev) {
+    ev.preventDefault();
+    const item = S.baixa;
+    const valor = lerValor(el('bValor').value);
+    if (!(valor > 0)) { avisar('Digite um valor válido.'); return; }
+    const btn = el('baixaSalvar');
+    btn.disabled = true;
+    chamar('marcarEfetivado', {
+      tipo: item.tipo, linha: item.linha, descricao: item.descricao, valor: valor, data: el('bData').value,
+    })
+      .then(function (novos) {
+        el('dlgBaixa').close();
+        receberDados(novos);
+        avisar('Baixa registrada: ' + item.descricao);
+      })
+      .catch(function (e) { avisar(e.message); })
+      .finally(function () { btn.disabled = false; });
+  }
+
+  // ---------- Eventos ----------
+  function mudarMes(delta) {
+    S.mes += delta;
+    if (S.mes < 0) { S.mes = 11; S.ano--; }
+    if (S.mes > 11) { S.mes = 0; S.ano++; }
+    el('fVencimento').value = '';
+    render();
+  }
+
+  function segmentado(id, chave) {
+    el(id).addEventListener('click', function (e) {
+      const b = e.target.closest('button');
+      if (!b) return;
+      el(id).querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      S[chave] = b.dataset.v;
+      render();
+    });
+  }
+
+  document.querySelectorAll('.nav button').forEach(function (b) {
+    b.addEventListener('click', function () { S.tela = b.dataset.tela; render(); window.scrollTo(0, 0); });
+  });
+  el('mesAnterior').addEventListener('click', function () { mudarMes(-1); });
+  el('mesProximo').addEventListener('click', function () { mudarMes(1); });
+  el('atualizar').addEventListener('click', function () { carregar().then(function () { avisar('Dados atualizados.'); }); });
+  segmentado('filtroTipo', 'tipoLista');
+  segmentado('filtroSituacao', 'situacao');
+  el('busca').addEventListener('input', function (e) { S.busca = e.target.value; renderLancamentos(); });
+  el('tipoNovo').addEventListener('click', function (e) {
+    const b = e.target.closest('button');
+    if (b) { S.tipoNovo = b.dataset.v; render(); }
+  });
+  el('fDescricao').addEventListener('change', autoPreencher);
+  el('formNovo').addEventListener('submit', salvarNovo);
+  el('formBaixa').addEventListener('submit', salvarBaixa);
+  el('baixaCancelar').addEventListener('click', function () { el('dlgBaixa').close(); });
+  // Quando o aparelho troca entre tema claro e escuro, os gráficos são redesenhados com as novas cores.
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+
+  carregar();
+</script>

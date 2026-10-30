@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>Painel Financeiro</title>
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <header class="topo">
+    <div class="topo-in">
+      <h1>Painel Financeiro</h1>
+      <div class="meses" aria-label="Mês exibido">
+        <button id="mesAnterior" aria-label="Mês anterior">‹</button>
+        <span class="rotulo" id="mesRotulo">—</span>
+        <button id="mesProximo" aria-label="Próximo mês">›</button>
+      </div>
+      <button class="icone-btn" id="atualizar" title="Buscar dados novos da planilha">↻ Atualizar</button>
+    </div>
+  </header>
+
+  <nav class="nav" aria-label="Seções">
+    <button data-tela="inicio" class="on">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+      <span>Início</span>
+    </button>
+    <button data-tela="bussola">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span>Bússola</span>
+    </button>
+    <button data-tela="lancamentos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      <span>Lançamentos</span>
+    </button>
+    <button data-tela="cartoes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+      <span>Contas</span>
+    </button>
+    <button data-tela="novo" class="mais">
+      <span class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></span>
+      <span>Novo</span>
+    </button>
+  </nav>
+
+  <main>
+    <div class="carregando" id="carregando">Carregando sua planilha…</div>
+
+    <!-- ===================== INÍCIO ===================== -->
+    <section class="tela" id="tela-inicio">
+      <div class="grade-kpi" id="kpis"></div>
+
+      <div class="grade-2">
+        <div class="cartao">
+          <h2>Saldo dia a dia <span class="dica">· aba Fluxo Diário</span></h2>
+          <div class="legenda">
+            <span><i style="border-color:var(--saldo)"></i>Efetivado</span>
+            <span><i class="tracejado" style="border-color:var(--saldo)"></i>Previsto</span>
+          </div>
+          <div class="grafico"><canvas id="graficoSaldo" aria-label="Gráfico do saldo diário do mês"></canvas></div>
+        </div>
+        <div class="cartao">
+          <h2>Contas a pagar e receber</h2>
+          <ul class="lista" id="proximos"></ul>
+        </div>
+      </div>
+
+      <div class="grade-2">
+        <div class="cartao">
+          <h2>Para onde foi o dinheiro <span class="dica">· despesas do mês por classificação</span></h2>
+          <div id="porCategoria"></div>
+        </div>
+        <div class="cartao">
+          <h2>Maiores despesas do mês</h2>
+          <div id="maiores"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== BÚSSOLA ===================== -->
+    <section class="tela" id="tela-bussola">
+      <div class="cartao">
+        <h2>Receitas x Despesas no ano <span class="dica">· efetivado quando já pago, previsto quando ainda não</span></h2>
+        <div class="legenda">
+          <span><b style="background:var(--receita)"></b>Receitas</span>
+          <span><b style="background:var(--despesa)"></b>Despesas</span>
+          <span><i style="border-color:var(--saldo)"></i>Resultado</span>
+        </div>
+        <div class="grafico alto"><canvas id="graficoAno" aria-label="Receitas e despesas por mês"></canvas></div>
+      </div>
+      <div class="cartao" style="margin-top:12px">
+        <h2>Tabela da Bússola <span class="dica">· mesmos números da aba 5</span></h2>
+        <div class="tabela-wrap"><table id="tabelaBussola"></table></div>
+      </div>
+    </section>
+
+    <!-- ===================== LANÇAMENTOS ===================== -->
+    <section class="tela" id="tela-lancamentos">
+      <div class="cartao">
+        <div class="filtros">
+          <div class="seg" id="filtroTipo">
+            <button data-v="despesa" class="on">Despesas</button>
+            <button data-v="receita">Receitas</button>
+          </div>
+          <div class="seg" id="filtroSituacao">
+            <button data-v="todos" class="on">Todos</button>
+            <button data-v="previsto">A pagar</button>
+            <button data-v="efetivado">Pagos</button>
+          </div>
+          <input class="busca" id="busca" type="search" placeholder="Buscar descrição…">
+        </div>
+        <p class="ajuda" id="resumoLista"></p>
+        <ul class="lista" id="listaLancamentos"></ul>
+      </div>
+    </section>
+
+    <!-- ===================== CONTAS E CARTÕES ===================== -->
+    <section class="tela" id="tela-cartoes">
+      <div class="grade-2" style="margin-top:0">
+        <div class="cartao">
+          <h2>Parcelas de cartão por mês <span class="dica">· aba Apoio parcelados</span></h2>
+          <div class="grafico"><canvas id="graficoParcelas" aria-label="Total de parcelas por mês"></canvas></div>
+          <div id="parcelasPorCartao" style="margin-top:12px"></div>
+        </div>
+        <div class="cartao">
+          <h2>Contas cadastradas <span class="dica">· saldo inicial da aba 1</span></h2>
+          <ul class="lista" id="listaContas"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== NOVO LANÇAMENTO ===================== -->
+    <section class="tela" id="tela-novo">
+      <div class="cartao">
+        <h2>Novo lançamento</h2>
+        <form class="form" id="formNovo" autocomplete="off">
+          <div class="tipo-toggle" id="tipoNovo">
+            <button type="button" data-v="despesa" data-on="despesa">− Despesa</button>
+            <button type="button" data-v="receita">+ Receita</button>
+          </div>
+          <div class="campo">
+            <label for="fDescricao">Descrição</label>
+            <input id="fDescricao" required maxlength="120" placeholder="Ex.: Conta de Luz" list="sugestoes">
+            <datalist id="sugestoes"></datalist>
+          </div>
+          <div class="linha-campos">
+            <div class="campo">
+              <label for="fCategoria" id="rotuloCategoria">Classificação</label>
+              <select id="fCategoria" required></select>
+            </div>
+            <div class="campo">
+              <label for="fValor">Valor previsto (R$)</label>
+              <input id="fValor" required inputmode="decimal" placeholder="0,00">
+            </div>
+          </div>
+          <div class="linha-campos">
+            <div class="campo">
+              <label for="fVencimento">Vencimento</label>
+              <input id="fVencimento" type="date" required>
+            </div>
+            <div class="campo">
+              <label for="fRepetir">Repetir por quantos meses?</label>
+              <input id="fRepetir" type="number" min="1" max="60" value="1">
+            </div>
+          </div>
+          <p class="ajuda">Com "Repetir" maior que 1, o painel cria uma linha para cada mês, como você já faz com Aluguel e Conta de Luz.</p>
+          <div><button class="btn primario" id="salvarNovo" type="submit">Salvar na planilha</button></div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="dlgBaixa">
+    <form method="dialog" id="formBaixa">
+      <h3 id="baixaTitulo">Marcar como pago</h3>
+      <p class="ajuda" id="baixaSub"></p>
+      <div class="linha-campos" style="margin-top:12px">
+        <div class="campo">
+          <label for="bValor">Valor efetivado (R$)</label>
+          <input id="bValor" required inputmode="decimal">
+        </div>
+        <div class="campo">
+          <label for="bData">Data efetivada</label>
+          <input id="bData" type="date" required>
+        </div>
+      </div>
+      <div class="botoes">
+        <button class="btn" value="cancelar" type="button" id="baixaCancelar">Cancelar</button>
+        <button class="btn primario" id="baixaSalvar" type="submit">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="aviso" id="aviso" role="status"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <?!= include('App'); ?>
+</body>
+</html>
